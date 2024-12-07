@@ -26,9 +26,14 @@
 static int ngx_ssl_ct_sct_list_index;
 
 static void *ngx_ssl_ct_create_conf(ngx_cycle_t *cycle);
+
 static ngx_str_t *ngx_ssl_ct_read_static_sct(ngx_conf_t *cf,
     ngx_str_t *dir, u_char *file, size_t file_len,
     ngx_str_t **sct_out);
+
+static int ngx_ssl_ct_ext_cb(SSL *s, unsigned int ext_type, unsigned int context,
+    const unsigned char **out, size_t *outlen, X509 *x, size_t chainidx,
+    int *al, void *add_arg);
 
 static ngx_core_module_t ngx_ssl_ct_module_ctx = {
     ngx_string("ssl_ct"),
@@ -199,7 +204,7 @@ next:
 
 #ifndef OPENSSL_IS_BORINGSSL
 #  if OPENSSL_VERSION_NUMBER >= 0x10101000L
-int ngx_ssl_ct_ext_cb(SSL *s, unsigned int ext_type, unsigned int context,
+static int ngx_ssl_ct_ext_cb(SSL *s, unsigned int ext_type, unsigned int context,
     const unsigned char **out, size_t *outlen, X509 *x, size_t chainidx,
     int *al, void *add_arg) {
     /* only include SCTs in the end-entity certificate */
