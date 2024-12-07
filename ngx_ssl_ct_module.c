@@ -179,7 +179,6 @@ next:
 
 #ifndef OPENSSL_IS_BORINGSSL
     /* add OpenSSL TLS extension */
-#  if OPENSSL_VERSION_NUMBER >= 0x10101000L
     int context = SSL_EXT_CLIENT_HELLO
                 | SSL_EXT_TLS1_2_SERVER_HELLO
                 | SSL_EXT_TLS1_3_CERTIFICATE;
@@ -189,21 +188,12 @@ next:
             "SSL_CTX_add_custom_ext failed");
         return NGX_CONF_ERROR;
     }
-#  else
-    if (SSL_CTX_add_server_custom_ext(ssl_ctx, NGX_SSL_CT_EXT,
-        &ngx_ssl_ct_ext_cb, NULL, NULL, NULL, NULL) != 1) {
-        ngx_log_error(NGX_LOG_EMERG, cf->log, 0,
-            "SSL_CTX_add_server_custom_ext failed");
-        return NGX_CONF_ERROR;
-    }
-#  endif
 #endif
 
     return NGX_CONF_OK;
 }
 
 #ifndef OPENSSL_IS_BORINGSSL
-#  if OPENSSL_VERSION_NUMBER >= 0x10101000L
 static int ngx_ssl_ct_ext_cb(SSL *s, unsigned int ext_type, unsigned int context,
     const unsigned char **out, size_t *outlen, X509 *x, size_t chainidx,
     int *al, void *add_arg) {
@@ -211,11 +201,6 @@ static int ngx_ssl_ct_ext_cb(SSL *s, unsigned int ext_type, unsigned int context
     if (context == SSL_EXT_TLS1_3_CERTIFICATE && chainidx != 0) {
         return 0;
     }
-#  else
-int ngx_ssl_ct_ext_cb(SSL *s, unsigned int ext_type, const unsigned char **out,
-    size_t *outlen, int *al, void *add_arg) {
-    X509 *x = NULL;
-#  endif
 
     if (!x) {
         /* get the cert OpenSSL chose to use for this connection */
@@ -489,8 +474,6 @@ ngx_ssl_ct_ext *ngx_ssl_ct_read_static_scts(ngx_conf_t *cf, ngx_ssl_ct_srv_conf_
                 return NULL;
             }
 
-#if OPENSSL_VERSION_NUMBER > 0x01010100
-
             const u_char* sct_buf_ptr = (const u_char *)sct_buf->data;
             SCT* ossl_sct_buf = o2i_SCT(NULL, &sct_buf_ptr, sct_buf->len);
 
@@ -526,8 +509,6 @@ ngx_ssl_ct_ext *ngx_ssl_ct_read_static_scts(ngx_conf_t *cf, ngx_ssl_ct_srv_conf_
 
                 goto skip_this;
             }
-
-#endif
 
             //We will use this SCT
             {
