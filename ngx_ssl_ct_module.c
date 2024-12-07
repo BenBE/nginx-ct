@@ -85,7 +85,7 @@ void *ngx_ssl_ct_create_srv_conf(ngx_conf_t *cf) {
 }
 
 char *ngx_ssl_ct_merge_srv_conf(ngx_conf_t *cf, void *parent, void *child,
-    SSL_CTX *ssl_ctx, ngx_array_t *certificates) {
+    ngx_ssl_t *ssl) {
     /* merge config */
     ngx_ssl_ct_srv_conf_t *prev = parent;
     ngx_ssl_ct_srv_conf_t *conf = child;
@@ -101,7 +101,7 @@ char *ngx_ssl_ct_merge_srv_conf(ngx_conf_t *cf, void *parent, void *child,
     /* validate config */
     if (conf->enable) {
         if (!conf->sct_dirs) {
-            ngx_log_error(NGX_LOG_EMERG, cf->log, 0,
+            ngx_ssl_error(NGX_LOG_EMERG, ssl->log, 0,
                 "no \"ssl_ct_static_scts\" is defined for the \"ssl_ct\""
                 "directive");
             return NGX_CONF_ERROR;
@@ -111,20 +111,15 @@ char *ngx_ssl_ct_merge_srv_conf(ngx_conf_t *cf, void *parent, void *child,
     }
 
     /* check if SSL is enabled */
-    if (!ssl_ctx) {
-        ngx_log_error(NGX_LOG_WARN, cf->log, 0,
-            "\"ssl_ct\" is only processed if ssl is enabled");
+    if (!ssl->ctx) {
+        ngx_ssl_error(NGX_LOG_WARN, ssl->log, 0,
+            "\"ssl_ct\" is only processed if SSL is enabled");
         return NGX_CONF_OK;
     }
 
-    /* loop through all the certs/SCT dirs */
-    //ngx_str_t *sct_dirs = conf->sct_dirs->elts;
-    X509 *cert = SSL_CTX_get_ex_data(ssl_ctx, ngx_ssl_certificate_index);
-
-    ngx_uint_t i;
-    for (i = 0; i < certificates->nelts; i++) {
-        /* the certificate linked list is stored in reverse order */
-        //ngx_str_t *sct_dir = &sct_dirs[sct_dir_count - i - 1];
+    /* loop through all the certs */
+    for (ngx_uint_t i = 0; i < ssl->certs.nelts; i++) {
+        X509 *cert = ((X509 **) ssl->certs.elts)[i];
 
         /* read the .sct files for this cert */
         ngx_ssl_ct_ext *sct_list = ngx_ssl_ct_read_static_scts(cf, conf, cert);
@@ -135,9 +130,9 @@ char *ngx_ssl_ct_merge_srv_conf(ngx_conf_t *cf, void *parent, void *child,
 
         if (sct_list->len == 0) {
             ngx_pfree(cf->pool, sct_list);
-            ngx_log_error(NGX_LOG_DEBUG, cf->log, 0,
+            ngx_ssl_error(NGX_LOG_DEBUG, ssl->log, 0,
                 "No SCTs to attach for this certificate");
-            goto next;
+            continue;
         }
 
 #ifndef OPENSSL_IS_BORINGSSL
@@ -147,32 +142,25 @@ char *ngx_ssl_ct_merge_srv_conf(ngx_conf_t *cf, void *parent, void *child,
         unsigned long ossl_error;
         while((ossl_error = ERR_get_error())) {
             char* ossl_errstr = ERR_error_string(ossl_error, NULL);
-            ngx_log_error(NGX_LOG_DEBUG, cf->log, 0,
+            ngx_ssl_error(NGX_LOG_DEBUG, ssl->log, 0,
                 "OpenSSL: %s", ossl_errstr);
         }
 #else
         if (SSL_CTX_set_signed_cert_timestamp_list(ssl_ctx, sct_list->buf,
             sct_list->len) == 0) {
-            ngx_log_error(NGX_LOG_EMERG, cf->log, 0,
+            ngx_ssl_error(NGX_LOG_EMERG, ssl->log, 0,
                 "SSL_CTX_set_signed_cert_timestamp_list failed");
             ngx_pfree(cf->pool, sct_list);
             return NGX_CONF_ERROR;
         }
 
         if (conf->sct_dirs->nelts > 1) {
-            ngx_log_error(NGX_LOG_WARN, cf->log, 0,
+            ngx_ssl_error(NGX_LOG_WARN, ssl->log, 0,
                 "BoringSSL does not support using SCTs with multiple "
                 "certificates, the last non-empty \"ssl_ct_static_scts\" "
                 "directory will be used for all certificates");
         }
 
-        break;
-#endif
-
-next:
-#if nginx_version >= 1011000
-        cert = X509_get_ex_data(cert, ngx_ssl_next_certificate_index);
-#else
         break;
 #endif
     }
@@ -182,9 +170,9 @@ next:
     int context = SSL_EXT_CLIENT_HELLO
                 | SSL_EXT_TLS1_2_SERVER_HELLO
                 | SSL_EXT_TLS1_3_CERTIFICATE;
-    if (SSL_CTX_add_custom_ext(ssl_ctx, NGX_SSL_CT_EXT, context,
+    if (SSL_CTX_add_custom_ext(ssl->ctx, NGX_SSL_CT_EXT, context,
         &ngx_ssl_ct_ext_cb, NULL, NULL, NULL, NULL) != 1) {
-        ngx_log_error(NGX_LOG_EMERG, cf->log, 0,
+        ngx_ssl_error(NGX_LOG_EMERG, ssl->log, 0,
             "SSL_CTX_add_custom_ext failed");
         return NGX_CONF_ERROR;
     }

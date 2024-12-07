@@ -40,6 +40,6 @@ ngx_int_t ngx_ssl_ct_init(ngx_log_t *log);
 ngx_ssl_ct_ext *ngx_ssl_ct_read_static_scts(ngx_conf_t *cf, ngx_ssl_ct_srv_conf_t *ctconf, X509 *cert);
 void *ngx_ssl_ct_create_srv_conf(ngx_conf_t *cf);
 char *ngx_ssl_ct_merge_srv_conf(ngx_conf_t *cf, void *parent, void *child,
-    SSL_CTX *ssl_ctx, ngx_array_t *certificates);
+    ngx_ssl_t *ssl);
 
 #endif

@@ -78,17 +78,5 @@ static char *ngx_mail_ssl_ct_merge_srv_conf(ngx_conf_t *cf, void *parent,
     ngx_mail_ssl_conf_t *ssl_conf = ngx_mail_conf_get_module_srv_conf(cf,
         ngx_mail_ssl_module);
 
-    ngx_array_t *certificates;
-
-#if nginx_version >= 1011000
-    certificates = ssl_conf->certificates;
-#else
-    certificates = ngx_array_create(cf->pool, 1, sizeof(ngx_str_t));
-
-    ngx_str_t *certificate = ngx_array_push(certificates);
-    *certificate = ssl_conf->certificate;
-#endif
-
-    return ngx_ssl_ct_merge_srv_conf(cf, parent, child, ssl_conf->ssl.ctx,
-        certificates);
+    return ngx_ssl_ct_merge_srv_conf(cf, parent, child, &ssl_conf->ssl);
 }
